@@ -1,0 +1,3 @@
+(library
+ (name drupal7_password_hash)
+ (libraries mirage-crypto base64))
