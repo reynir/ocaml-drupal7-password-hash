@@ -37,22 +37,25 @@ let digest_of_string = function
 (* 55 is including the 'settings' *)
 let hash_length = 55 - 12
 
+let hash digest password salt count =
+  let hash = ref (Mirage_crypto.Hash.digest digest
+                    (Cstruct.append salt password)) in
+  for _ = 1 to count do
+    hash := Mirage_crypto.Hash.digest digest
+        (Cstruct.append !hash password)
+  done;
+  let encoded = base64_encode (Cstruct.to_string !hash) in
+  String.sub encoded 0 hash_length
+
 let verify password (encoded : string) =
   let password = Cstruct.of_string password in
   let digest = digest_of_string (String.sub encoded 0 3) in
-  let module Digest = (val Mirage_crypto.Hash.module_of digest : Mirage_crypto.Hash.S) in
   let count =
     let count_log2 = String.index itoa64 encoded.[3] in
     1 lsl count_log2
   and salt = String.sub encoded 4 8 in
-  let hash = ref (Digest.digest (Cstruct.append (Cstruct.of_string salt) password)) in
-  for _ = 1 to count do
-    hash := Digest.digest (Cstruct.append !hash password)
-  done;
-  let hash_encoded =
-    let encoded = base64_encode (Cstruct.to_string !hash) in
-    String.sub encoded 0 hash_length in
-    hash_encoded = (String.sub encoded 12 hash_length)
+  let hash_encoded = hash digest password (Cstruct.of_string salt) count in
+  hash_encoded = (String.sub encoded 12 hash_length)
 
 let hash_with_salt password random_salt =
   let () = assert (String.length random_salt = 6) in
@@ -62,8 +65,6 @@ let hash_with_salt password random_salt =
       itoa64.[count_log2]
       salt in
   let count = 1 lsl count_log2 in
-  let hash = ref (Mirage_crypto.Hash.SHA512.digest (Cstruct.of_string (salt ^ password))) in
-  for _ = 1 to count do
-    hash := Mirage_crypto.Hash.SHA512.digest (Cstruct.append !hash (Cstruct.of_string password))
-  done;
-  settings ^ base64_encode (Cstruct.to_string !hash)
+  let hash_encoded = hash `SHA512 (Cstruct.of_string password)
+      (Cstruct.of_string salt) count in
+  settings ^ hash_encoded
