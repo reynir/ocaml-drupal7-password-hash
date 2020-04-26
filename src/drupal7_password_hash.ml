@@ -53,3 +53,17 @@ let verify password (encoded : string) =
     let encoded = base64_encode (Cstruct.to_string !hash) in
     String.sub encoded 0 hash_length in
     hash_encoded = (String.sub encoded 12 hash_length)
+
+let hash_with_salt password random_salt =
+  let () = assert (String.length random_salt = 6) in
+  let count_log2 = 15 in
+  let salt = base64_encode random_salt in
+  let settings = Printf.sprintf "$S$%c%s"
+      itoa64.[count_log2]
+      salt in
+  let count = 1 lsl count_log2 in
+  let hash = ref (Mirage_crypto.Hash.SHA512.digest (Cstruct.of_string (salt ^ password))) in
+  for _ = 1 to count do
+    hash := Mirage_crypto.Hash.SHA512.digest (Cstruct.append !hash (Cstruct.of_string password))
+  done;
+  settings ^ base64_encode (Cstruct.to_string !hash)
